@@ -929,5 +929,25 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
+    // 全局发音函数，所有设备都能用（电脑/安卓/iPhone/iPad）
+function speak(text) {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    let u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.rate = 0.95;
+    window.speechSynthesis.speak(u);
+  }
+}
+
+// 给所有“单词发音按钮”加上点击事件
+document.querySelectorAll('.word-speak').forEach(btn => {
+  btn.addEventListener('click', () => speak(btn.dataset.text));
+});
+
+// 给所有“例句发音按钮”加上点击事件（关键！补上你缺的例句发音）
+document.querySelectorAll('.sentence-speak').forEach(btn => {
+  btn.addEventListener('click', () => speak(btn.dataset.text));
+});
 </body>
 </html>
