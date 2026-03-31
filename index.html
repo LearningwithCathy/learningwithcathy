@@ -503,6 +503,9 @@
           const isMastered = masteredIds.includes(currentWord.id);
           const progress = ((currentIndex + 1) / VOCABULARY_LIST.length) * 100;
 
+          const audioRef = useRef(null);
+          const [isPlaying, setIsPlaying] = useState(false);
+
           // 使用 HTML5 Audio 播放真人发音接口
           const speak = useCallback((text) => {
             if (!text || typeof text !== 'string') return;
@@ -521,16 +524,31 @@
             const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanText)}&type=2`;
             
             try {
-              // 每次创建新实例以确保在所有平台（尤其是移动端）都能正常播放
-              const audio = new Audio();
+              if (!audioRef.current) {
+                audioRef.current = new Audio();
+                audioRef.current.onplay = () => setIsPlaying(true);
+                audioRef.current.onended = () => setIsPlaying(false);
+                audioRef.current.onerror = () => setIsPlaying(false);
+              }
+              
+              const audio = audioRef.current;
+              audio.pause();
               audio.src = url;
-              audio.play().catch(e => {
-                console.warn("音频播放被拦截或失败，尝试重新加载:", e);
-                audio.load();
-                audio.play().catch(err => console.error("重试播放失败:", err));
-              });
+              audio.load(); // 显式调用 load 以增强兼容性
+              
+              const playPromise = audio.play();
+              if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                  console.warn("音频播放被拦截或失败:", e);
+                  // 某些情况下需要再次尝试
+                  setTimeout(() => {
+                    audio.play().catch(err => console.error("重试播放失败:", err));
+                  }, 50);
+                });
+              }
             } catch (e) {
-              console.error("音频创建失败:", e);
+              console.error("音频播放异常:", e);
+              setIsPlaying(false);
             }
           }, []);
 
@@ -593,7 +611,11 @@
               } else if (e.code === 'ArrowLeft') {
                 handlePrev();
               } else if (e.code === 'KeyV') {
-                speak(currentWord.type === 'sentence' ? currentWord.example : currentWord.word);
+                if (isFlipped || currentWord.type === 'sentence') {
+                  speak(currentWord.example);
+                } else {
+                  speak(currentWord.word);
+                }
               }
             };
 
@@ -734,9 +756,9 @@
 
                           <div className="flex flex-col items-center justify-center text-center flex-1 w-full px-2 md:px-6">
                             {currentWord.type === 'sentence' ? (
-                              <div className="space-y-3 md:space-y-4 w-full">
-                                <div className="flex flex-col items-center gap-2 md:gap-3">
-                                  <p className="text-sm md:text-lg font-display font-medium text-stone-400">
+                              <div className="space-y-4 md:space-y-6 w-full">
+                                <div className="flex flex-col items-center gap-3 md:gap-4">
+                                  <p className="text-base md:text-xl font-display font-medium text-stone-500">
                                     {currentWord.translation}
                                   </p>
                                   <button
@@ -744,12 +766,13 @@
                                       e.stopPropagation();
                                       speak(currentWord.example);
                                     }}
-                                    className="p-2.5 md:p-2 text-stone-300 hover:text-stone-900 transition-colors active:scale-90"
+                                    className="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-full hover:bg-emerald-100 transition-all active:scale-90 shadow-sm border border-emerald-100"
+                                    title="播放例句发音"
                                   >
-                                    <Icon name="volume-2" className="w-5 h-5 md:w-6 md:h-6" />
+                                    <Icon name="volume-2" className="w-6 h-6 md:w-8 md:h-8" />
                                   </button>
                                 </div>
-                                <div className="text-lg md:text-2xl font-display font-bold text-stone-900 leading-relaxed whitespace-pre-wrap break-words">
+                                <div className="text-xl md:text-3xl font-display font-bold text-stone-900 leading-relaxed whitespace-pre-wrap break-words px-4">
                                   {currentWord.word}
                                 </div>
                               </div>
@@ -760,8 +783,8 @@
                                 >
                                   {currentWord.word}
                                 </motion.h2>
-                                <div className="flex items-center gap-3 md:gap-4 opacity-40">
-                                  <span className="text-lg md:text-xl font-mono text-stone-400 font-medium">
+                                <div className="flex items-center gap-4 md:gap-6">
+                                  <span className="text-xl md:text-2xl font-mono text-stone-400 font-medium tracking-wide">
                                     {currentWord.phonetic}
                                   </span>
                                   <button
@@ -769,9 +792,10 @@
                                       e.stopPropagation();
                                       speak(currentWord.word);
                                     }}
-                                    className="p-2.5 md:p-2 text-stone-400 hover:text-stone-900 transition-colors active:scale-90"
+                                    className="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-full hover:bg-emerald-100 transition-all active:scale-90 shadow-sm border border-emerald-100"
+                                    title="播放单词发音"
                                   >
-                                    <Icon name="volume-2" className="w-5 h-5 md:w-6 md:h-6" />
+                                    <Icon name="volume-2" className="w-6 h-6 md:w-8 md:h-8" />
                                   </button>
                                 </div>
                               </>
@@ -812,25 +836,26 @@
                                 <h3 className="text-stone-600 text-[8px] md:text-[9px] font-bold uppercase tracking-[0.2em] mb-3 md:mb-4">
                                   {currentWord.type === 'sentence' ? 'Full Sentence' : 'Example'}
                                 </h3>
-                                <div className="space-y-3 md:space-y-4">
-                                  <div className="flex items-start gap-3 md:gap-4">
+                                <div className="space-y-4 md:space-y-6">
+                                  <div className="flex items-start gap-4 md:gap-6">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         speak(currentWord.example);
                                       }}
-                                      className="mt-0.5 p-2.5 md:p-2 text-stone-600 hover:text-white transition-colors active:scale-90"
+                                      className="mt-1 p-3 md:p-4 bg-stone-800 text-emerald-400 rounded-full hover:bg-stone-700 hover:text-emerald-300 transition-all active:scale-90 shadow-inner border border-stone-700"
+                                      title="播放例句发音"
                                     >
-                                      <Icon name="volume-2" className="w-5 h-5 md:w-6 md:h-6" />
+                                      <Icon name="volume-2" className="w-6 h-6 md:w-8 md:h-8" />
                                     </button>
                                     <div className="flex-1">
-                                      <div className={`${currentWord.type === 'sentence' ? 'text-base md:text-lg' : 'text-lg md:text-xl'} font-medium text-stone-100 leading-relaxed whitespace-pre-wrap break-words`}>
+                                      <div className={`${currentWord.type === 'sentence' ? 'text-lg md:text-2xl' : 'text-xl md:text-2xl'} font-medium text-stone-100 leading-relaxed whitespace-pre-wrap break-words`}>
                                         {currentWord.type === 'sentence' 
                                           ? renderHighlightedText(currentWord.example)
                                           : currentWord.example}
                                       </div>
                                       {currentWord.type !== 'sentence' && (
-                                        <p className="text-stone-400 mt-2 text-sm md:text-base italic">
+                                        <p className="text-stone-400 mt-3 text-base md:text-lg italic border-l-2 border-stone-700 pl-4">
                                           {currentWord.exampleTranslation}
                                         </p>
                                       )}
