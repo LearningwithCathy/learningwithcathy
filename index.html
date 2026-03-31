@@ -504,26 +504,35 @@
           const progress = ((currentIndex + 1) / VOCABULARY_LIST.length) * 100;
 
           // 使用 HTML5 Audio 播放真人发音接口
-          const audioRef = useRef(new Audio());
+          const speak = useCallback((text) => {
+            if (!text || typeof text !== 'string') return;
 
-          const speak = (text) => {
             // 清理文本中的特殊符号，保留纯净单词/句子
             const cleanText = text
-              .replace(/\[|\]/g, '')
-              .replace(/_/g, '')
-              .replace(/^[—\-\s]+/, '')
-              .replace(/\n[—\-\s]+/g, ' ');
+              .replace(/\[|\]/g, '') // 移除方括号
+              .replace(/_/g, '')     // 移除下划线
+              .replace(/^[\s\-\u2013\u2014\u2015]+/, '') // 移除开头的破折号和空格
+              .replace(/\n[\s\-\u2013\u2014\u2015]+/g, ' ') // 移除换行后的破折号并替换为空格
+              .trim();
             
+            if (!cleanText) return;
+
             // 使用有道真人美式发音接口 (type=2 为美音)
             const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanText)}&type=2`;
             
-            // 停止当前正在播放的声音并播放新声音
-            audioRef.current.pause();
-            audioRef.current.src = url;
-            audioRef.current.play().catch(e => {
-              console.warn("音频播放被拦截或失败，请确保在用户点击后触发:", e);
-            });
-          };
+            try {
+              // 每次创建新实例以确保在所有平台（尤其是移动端）都能正常播放
+              const audio = new Audio();
+              audio.src = url;
+              audio.play().catch(e => {
+                console.warn("音频播放被拦截或失败，尝试重新加载:", e);
+                audio.load();
+                audio.play().catch(err => console.error("重试播放失败:", err));
+              });
+            } catch (e) {
+              console.error("音频创建失败:", e);
+            }
+          }, []);
 
           const renderHighlightedText = (text) => {
             const parts = text.split(/(\[.*?\])/g);
@@ -590,7 +599,7 @@
 
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
-          }, [handleNext, handlePrev, showSummary, currentWord]);
+          }, [handleNext, handlePrev, showSummary, currentWord, speak]);
 
           const categoryColors = {
             Fruit: 'bg-pink-100 text-pink-600 border-pink-200',
@@ -810,7 +819,7 @@
                                         e.stopPropagation();
                                         speak(currentWord.example);
                                       }}
-                                      className="mt-0.5 p-2 text-stone-600 hover:text-white transition-colors active:scale-90"
+                                      className="mt-0.5 p-2.5 md:p-2 text-stone-600 hover:text-white transition-colors active:scale-90"
                                     >
                                       <Icon name="volume-2" className="w-5 h-5 md:w-6 md:h-6" />
                                     </button>
