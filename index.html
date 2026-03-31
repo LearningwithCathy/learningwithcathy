@@ -503,31 +503,26 @@
           const isMastered = masteredIds.includes(currentWord.id);
           const progress = ((currentIndex + 1) / VOCABULARY_LIST.length) * 100;
 
-          // Audio Ref to handle iOS/Android speech synthesis quirks
-          const synthRef = useRef(window.speechSynthesis);
+          // 使用 HTML5 Audio 播放真人发音接口
+          const audioRef = useRef(new Audio());
 
-          const speak = (text, lang = 'en-US') => {
-            if (!synthRef.current) return;
-            
-            // Cancel any ongoing speech
-            synthRef.current.cancel();
-
+          const speak = (text) => {
+            // 清理文本中的特殊符号，保留纯净单词/句子
             const cleanText = text
               .replace(/\[|\]/g, '')
               .replace(/_/g, '')
               .replace(/^[—\-\s]+/, '')
               .replace(/\n[—\-\s]+/g, ' ');
             
-            const utterance = new SpeechSynthesisUtterance(cleanText);
-            utterance.lang = lang;
-            utterance.rate = 0.85; // Slightly slower for better clarity
+            // 使用有道真人美式发音接口 (type=2 为美音)
+            const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanText)}&type=2`;
             
-            // Fix for some mobile browsers where speech hangs
-            utterance.onend = () => {
-                synthRef.current.cancel();
-            };
-            
-            synthRef.current.speak(utterance);
+            // 停止当前正在播放的声音并播放新声音
+            audioRef.current.pause();
+            audioRef.current.src = url;
+            audioRef.current.play().catch(e => {
+              console.warn("音频播放被拦截或失败，请确保在用户点击后触发:", e);
+            });
           };
 
           const renderHighlightedText = (text) => {
